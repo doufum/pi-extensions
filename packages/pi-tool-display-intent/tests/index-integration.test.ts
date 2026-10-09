@@ -40,6 +40,7 @@ function createApiStub(
   const capturedHandlers: CapturedHandler[] = [];
 
   const api = {
+    registerToolRenderer(): void {},
     registerTool(tool: unknown): void {
       capturedTools.push(tool as { name: string } & Record<string, unknown>);
       overrides.registerTool?.(tool);
@@ -204,6 +205,7 @@ test("entry point tolerates tools with existing owners in getAllTools", () => {
 test("graceful degradation: extension throws when registerCommand is missing", () => {
   // Simulate a minimal stub missing registerCommand
   const minimalApi = {
+    registerToolRenderer(): void {},
     registerTool(): void { /* no-op */ },
     on(): void { /* no-op */ },
     getAllTools(): unknown[] { return []; },

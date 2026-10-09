@@ -2303,6 +2303,9 @@ export function registerToolDisplayOverrides(
       return undefined;
     }
 
+    // Codemode has a display-only renderer. A legacy generic override must not
+    // decorate its schema or replace its execution metadata.
+    if (toolName === "codemode") return undefined;
     const override = getRuntimeCustomToolOverride(toolName, getConfig());
     return override ? { toolName, override } : undefined;
   };

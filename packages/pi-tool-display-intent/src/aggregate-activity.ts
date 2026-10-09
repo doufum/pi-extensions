@@ -23,6 +23,7 @@ import type { ExpandedTimeline, ToolDisplayConfig } from "./types.js";
 import { layoutPreviewRows } from "./preview-text.js";
 import { pluralize, shortenPath } from "./render-utils.js";
 import { registerTimer } from "./disposable.js";
+import { codemodeCallSummary, readCodemodeSnapshot, renderCodemodeSnapshot, type CodemodeSnapshot } from "./codemode-display.js";
 
 const RUN_BREATHE_MS = 2400;
 const RUN_BREATHE_TICK_MS = 80;
@@ -82,6 +83,8 @@ export interface AggregateMember {
 	agentTurnId?: string;
 	/** Immutable interpretation of the Agent tool receipt, not live task progress. */
 	agentReceipt?: AgentCallReceipt;
+	/** Native codemode ledger, kept with the parent for live and restored views. */
+	codemode?: CodemodeSnapshot;
 }
 
 export interface AggregateUsageTotals {
@@ -134,6 +137,8 @@ export interface AggregateActivityView {
 	hasRunning: boolean;
 	latestNarration?: string;
 	callCount: number;
+	nestedCallCount?: number;
+	nestedFailedCount?: number;
 	customMessageCount?: number;
 	agentTurnCount: number;
 	settled: boolean;
@@ -354,11 +359,13 @@ function bashCommandSource(args: Record<string, unknown>): string {
 }
 
 export function formatAggregateTarget(
-	member: Pick<AggregateMember, "toolName" | "args">,
+	member: Pick<AggregateMember, "toolName" | "args" | "codemode">,
 ): string {
 	const args = member.args;
 	const path = formatAggregatePath(args);
 	switch (member.toolName) {
+		case "codemode":
+			return member.codemode ? `Codemode · ${codemodeCallSummary(member.codemode.calls)}` : "Codemode";
 		case "read":
 			return `Read(${path})`;
 		case "grep": {
@@ -390,7 +397,7 @@ function toolColor(toolName: string): string {
 }
 
 function formatColoredTarget(
-	member: Pick<AggregateMember, "toolName" | "args">,
+	member: Pick<AggregateMember, "toolName" | "args" | "codemode">,
 	theme: AggregateRenderTheme,
 ): string {
 	return theme.fg(toolColor(member.toolName), formatAggregateTarget(member));
@@ -1674,10 +1681,11 @@ export class AggregateProjection {
 		this.invalidateGroup(member.groupId, toolCallId);
 	}
 
-	markUpdated(toolCallId: string, args: unknown): void {
+	markUpdated(toolCallId: string, args: unknown, result?: unknown): void {
 		const member = this.membersById.get(toolCallId);
 		if (!member) return;
 		member.args = { ...member.args, ...toRecord(args) };
+		if (member.toolName === "codemode" && result !== undefined) member.codemode = readCodemodeSnapshot(result);
 		if (member.state === "pending") member.state = "running";
 		this.invalidateGroup(member.groupId, toolCallId);
 	}
@@ -1690,6 +1698,7 @@ export class AggregateProjection {
 	): void {
 		const member = this.membersById.get(toolCallId);
 		if (!member) return;
+		if (member.toolName === "codemode") member.codemode = readCodemodeSnapshot(result);
 		if (isError) {
 			this.markFailed(toolCallId, firstMeaningfulLine(result, "Tool failed."), options);
 			return;
@@ -1978,6 +1987,12 @@ export class AggregateProjection {
 			.slice(0, Math.max(0, ACTIVE_ROW_LIMIT - active.length));
 		const displayRows = [...active, ...retainedDone]
 			.sort((left, right) => left.sourceOrder - right.sourceOrder);
+		// Keep a short result for the last codemode after transient done rows settle.
+		const lastCodemode = [...aggregateMembers].reverse().find((entry) => entry.codemode && entry.state === "success");
+		if (lastCodemode && !displayRows.includes(lastCodemode) && displayRows.length < ACTIVE_ROW_LIMIT) {
+			displayRows.push(lastCodemode);
+			displayRows.sort((left, right) => left.sourceOrder - right.sourceOrder);
+		}
 		const failed = aggregateMembers
 			.filter((entry) => entry.state === "failed")
 			.sort((left, right) => left.sourceOrder - right.sourceOrder);
@@ -2003,6 +2018,8 @@ export class AggregateProjection {
 			hasRunning: grouped.some((entry) => entry.state === "pending" || entry.state === "running"),
 			latestNarration: this.latestNarrationFor(hostId),
 			callCount: grouped.length,
+			nestedCallCount: grouped.reduce((count, member) => count + (member.codemode?.calls.length ?? 0), 0),
+			nestedFailedCount: grouped.reduce((count, member) => count + (member.codemode?.calls.filter((call) => call.status === "error" || call.status === "cancelled").length ?? 0), 0),
 			customMessageCount: group.customItemIds.filter((id) => !this.emptyCustomFrames.has(id)).length,
 			agentTurnCount: grouped.length ? Math.max(1, group.agentTurnIds.length) : group.agentTurnIds.length,
 			settled: group.settled,
@@ -2208,7 +2225,7 @@ function appendTruncationMark(row: string, width: number): string {
 }
 
 function renderBoundedCallRows(
-	member: Pick<AggregateMember, "toolName" | "args" | "state" | "errorSummary" | "agentReceipt">,
+	member: Pick<AggregateMember, "toolName" | "args" | "state" | "errorSummary" | "agentReceipt" | "codemode">,
 	contentWidth: number,
 	theme: AggregateRenderTheme,
 	options: {
@@ -2309,7 +2326,7 @@ export function attachExpandedAggregateSummary(
 }
 
 export function renderAggregateMemberRow(
-	member: Pick<AggregateMember, "toolName" | "args" | "state" | "errorSummary" | "startedAtMs" | "endedAtMs" | "agentReceipt">,
+	member: Pick<AggregateMember, "toolName" | "args" | "state" | "errorSummary" | "startedAtMs" | "endedAtMs" | "agentReceipt" | "codemode">,
 	width: number,
 	theme: AggregateRenderTheme,
 	edge: AggregateFrameEdge = "only",
@@ -2319,18 +2336,34 @@ export function renderAggregateMemberRow(
 	if (safeWidth === 0) return [];
 	const contentWidth = Math.max(1, safeWidth - visibleWidth(framePrefixForEdge(edge)));
 	return applyAggregateGroupFrame(
-		renderBoundedCallRows(member, contentWidth, theme, {
-			maxRows: EXPANDED_CALL_ROW_LIMIT,
-			timing: formatMemberTiming(member, theme, nowMs),
-		}),
+		[
+			...renderBoundedCallRows(member, contentWidth, theme, {
+				maxRows: EXPANDED_CALL_ROW_LIMIT,
+				timing: formatMemberTiming(member, theme, nowMs),
+			}),
+			...renderAggregateCodemodeBody(member, contentWidth, theme),
+		],
 		safeWidth,
 		theme,
 		edge,
 	);
 }
 
+function renderAggregateCodemodeBody(
+	member: Pick<AggregateMember, "codemode" | "state">,
+	width: number,
+	theme: AggregateRenderTheme,
+	expanded = true,
+): string[] {
+	if (!member.codemode) return [];
+	const prefix = "  ";
+	return renderCodemodeSnapshot(member.codemode, Math.max(0, width - prefix.length), theme, {
+		expanded, partial: member.state === "running", isError: member.state === "failed", maxRows: 8,
+	}).slice(1).map((line) => prefix + line);
+}
+
 export function renderExpandedAggregateMember(
-	member: Pick<AggregateMember, "toolName" | "args" | "state" | "errorSummary" | "startedAtMs" | "endedAtMs" | "agentReceipt">,
+	member: Pick<AggregateMember, "toolName" | "args" | "state" | "errorSummary" | "startedAtMs" | "endedAtMs" | "agentReceipt" | "codemode">,
 	width: number,
 	theme: AggregateRenderTheme,
 	edge: AggregateFrameEdge = "only",
@@ -2350,6 +2383,7 @@ export function renderExpandedAggregateMember(
 		theme,
 		{ indent, maxRows: EXPANDED_CALL_ROW_LIMIT },
 	));
+	inner.push(...renderAggregateCodemodeBody(member, Math.max(0, safeWidth - visibleWidth(framePrefixForEdge(edge)) - indent.length), theme).map((line) => indent + line));
 	return applyAggregateGroupFrame(inner, safeWidth, theme, edge);
 }
 
@@ -2368,8 +2402,10 @@ export function renderAggregateActivity(
 		parts.push(`${view.callCount} ${pluralize(view.callCount, "call")}`, `${view.agentTurnCount} ${pluralize(view.agentTurnCount, "turn")}`);
 	}
 	if (view.customMessageCount) parts.push(`${view.customMessageCount} ${pluralize(view.customMessageCount, "message")}`);
+	if (view.nestedCallCount) parts.push(`${view.nestedCallCount} nested ${pluralize(view.nestedCallCount, "call")}`);
 	const totals = theme.fg("muted", ` (${parts.join(" · ")})`);
 	let header = `${marker} ${theme.fg("toolTitle", theme.bold?.("Run") ?? "Run")}${totals}`;
+	if (view.nestedFailedCount) header += theme.fg("error", ` · ${view.nestedFailedCount} nested failed/cancelled`);
 	if (hasFailure) header += theme.fg("error", ` · ${view.failedCount} failed`);
 	for (const summary of view.toolSummaries) {
 		header += theme.fg("muted", " · ");
@@ -2396,6 +2432,13 @@ export function renderAggregateActivity(
 			timing: formatMemberTiming(row, theme, nowMs),
 			includeFailureDetail: false,
 		}));
+		lines.push(...renderAggregateCodemodeBody(row, Math.max(0, safeWidth - 2), theme, false).map((line) => "  " + line));
+	}
+	for (const row of view.failed) {
+		if (row.codemode && !view.displayRows.includes(row)) {
+			lines.push(...renderBoundedCallRows(row, safeWidth, theme, { indent: "  ", maxRows: COLLAPSED_CALL_ROW_LIMIT }));
+			lines.push(...renderAggregateCodemodeBody(row, Math.max(0, safeWidth - 2), theme, false).map((line) => "  " + line));
+		}
 	}
 	if (view.activeOverflow > 0) {
 		lines.push(
@@ -2715,11 +2758,15 @@ export function registerAggregateProjectionEvents(
 		projection.finishContextTurn(event.message, event.toolResults, ctx?.sessionManager?.getBranch());
 	});
 	pi.on("tool_execution_start", async (event) => {
+		if (event.parentToolCallId) return;
 		clearSettleTimer();
 		projection.markStarted(event.toolCallId, event.toolName, event.args);
 	});
-	pi.on("tool_execution_update", async (event) => projection.markUpdated(event.toolCallId, event.args));
+	pi.on("tool_execution_update", async (event) => {
+		if (!event.parentToolCallId) projection.markUpdated(event.toolCallId, event.args, event.partialResult);
+	});
 	pi.on("tool_execution_end", async (event) => {
+		if (event.parentToolCallId) return;
 		projection.markComplete(event.toolCallId, event.result, event.isError === true);
 	});
 	pi.on("agent_settled", async () => {

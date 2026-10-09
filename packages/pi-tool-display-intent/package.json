@@ -1,7 +1,7 @@
 {
   "name": "@zhcsyncer/pi-tool-display-intent",
   "version": "0.10.1",
-  "description": "Intent-aware tool rendering, diff visualization, and output compaction for Pi.",
+  "description": "Codemode-aware fork with intent rendering, diff visualization, and output compaction for Pi.",
   "type": "module",
   "main": "./extensions/tool-display-intent.ts",
   "exports": {
@@ -46,20 +46,21 @@
   "author": "zhcsyncer",
   "contributors": [
     "MasuRii (original pi-tool-display author)",
-    "Mert Deveci (pi-tool-display-summary author)"
+    "Mert Deveci (pi-tool-display-summary author)",
+    "doufum (codemode display fork)"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zhcsyncer/pi-extensions.git",
+    "url": "git+https://github.com/doufum/pi-extensions.git",
     "directory": "packages/pi-tool-display-intent"
   },
-  "homepage": "https://github.com/zhcsyncer/pi-extensions/tree/main/packages/pi-tool-display-intent#readme",
+  "homepage": "https://github.com/doufum/pi-extensions/tree/feat/codemode-display/packages/pi-tool-display-intent#readme",
   "bugs": {
-    "url": "https://github.com/zhcsyncer/pi-extensions/issues"
+    "url": "https://github.com/doufum/pi-extensions/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19.0"
   },
   "publishConfig": {
     "access": "public"
@@ -71,12 +72,12 @@
     "image": "https://raw.githubusercontent.com/zhcsyncer/pi-extensions/main/packages/pi-tool-display-intent/assets/demo-aggregate-1.png"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.80.0 <1",
-    "@earendil-works/pi-tui": ">=0.80.0 <1"
+    "@earendil-works/pi-coding-agent": ">=1.1.0 <2",
+    "@earendil-works/pi-tui": ">=1.1.0 <2"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.86.1",
-    "@earendil-works/pi-tui": "0.86.1",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-tui": "1.1.0",
     "tsx": "4.22.4",
     "typescript": "6.0.3"
   }

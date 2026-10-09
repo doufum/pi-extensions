@@ -2,6 +2,8 @@
 
 [English](./README.md)
 
+这是 [doufum/pi-extensions](https://github.com/doufum/pi-extensions/tree/feat/codemode-display/packages/pi-tool-display-intent) 中的 codemode fork，基于 `@zhcsyncer/pi-tool-display-intent` 0.10.1，面向 Pi 1.1.0 及以上版本。保留上游两种布局，并增加 codemode 内部调用、耗时、失败与短结果展示。
+
 ![收起的 Run 账本](./assets/demo-aggregate-1.png)
 
 `pi-tool-display-intent` 是 [`MasuRii/pi-tool-display`](https://github.com/MasuRii/pi-tool-display) 0.5.0 的维护 fork，保留紧凑工具展示，并加上模型写的用户可读意图。`displaySummary` 改编自 [`mertdeveci5/pi-tool-display-summary`](https://github.com/mertdeveci5/pi-tool-display-summary) 0.1.0。
@@ -32,8 +34,8 @@ $ pnpm test — 验证 extension 测试套件
 ## 安装
 
 ```bash
-pi install npm:@zhcsyncer/pi-tool-display-intent
-pi install npm:@zhcsyncer/pi-extensions
+git clone --branch feat/codemode-display https://github.com/doufum/pi-extensions.git
+pi install ./pi-extensions/packages/pi-tool-display-intent
 ```
 
 然后重启 Pi 或执行 `/reload`。
@@ -47,6 +49,20 @@ pi install npm:@zhcsyncer/pi-extensions
 ```
 
 空的 `/tools` 打开设置面板。切布局会先确认再保存并 reload。两种布局都能配置 bash intent 语言，修改后经 `/reload` 生效；其它展示旋钮按布局显示。
+
+## Codemode
+
+两种布局都会自动使用实际调用生成摘要，无需额外填写意图。逐工具模式收起示例：
+
+```text
+● Codemode · read ×2 · bash ×1
+  3 succeeded · 1.2s
+  测试通过
+```
+
+收起隐藏 JavaScript 脚本，保留最多三行结果预览。内部调用失败或取消时显示提示，即使脚本用 `Promise.allSettled` 或 `catch` 处理了错误，也会显示内部失败。没有调用工具的脚本显示 `0 calls`。
+
+`Ctrl+O` 展开逐工具模式的脚本、内部调用目标与耗时，以及结果。在 Run 聚合模式，codemode 计为一次调用，内部调用另行统计；展开显示内部调用和短结果，点击 codemode 行可在 Args 查看高亮脚本，在 Result 与 Metadata 查看输出和调用详情。Run 结束后保留最后一个 codemode 的短结果。旧会话缺少内部调用记录时仍可查看输出。
 
 ## 布局
 

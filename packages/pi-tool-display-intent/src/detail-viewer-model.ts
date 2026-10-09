@@ -419,6 +419,7 @@ function argsTab(args: unknown, toolName: string): DetailTab {
 			return {
 				key, kind, value: kind === "json" ? JSON.stringify(value, null, 2) : String(value),
 				...(toolName === "bash" && key === "command" && kind === "string" ? { language: "bash" } : {}),
+				...(toolName === "codemode" && key === "code" && kind === "string" ? { language: "javascript" } : {}),
 			};
 		});
 		if (fields.some((item) => boundedText(item.value, false).truncated)) return tab;

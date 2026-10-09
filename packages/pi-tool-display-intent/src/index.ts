@@ -14,6 +14,7 @@ import {
 } from "./capabilities.js";
 import { registerAggregateThinkingPlaceholderSuppression } from "./aggregate-thinking-placeholder.js";
 import { registerToolDisplayOverrides } from "./tool-overrides.js";
+import { registerCodemodeRenderer } from "./codemode-display.js";
 import { disposeAll, resetDisposed } from "./disposable.js";
 import registerNativeUserMessageBox from "./user-message-box-native.js";
 import {
@@ -104,6 +105,7 @@ export default function toolDisplayExtension(pi: ExtensionAPI): void {
   };
 
   registerToolDisplayOverrides(pi, getEffectiveConfig);
+  registerCodemodeRenderer(pi, getEffectiveConfig);
   registerAggregateThinkingPlaceholderSuppression(
     pi,
     () => initial.config.toolCallLayout === "aggregate",

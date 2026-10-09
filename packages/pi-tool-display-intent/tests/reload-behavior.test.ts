@@ -63,6 +63,7 @@ function createApiStub(
   const capturedHandlers: CapturedHandler[] = [];
 
   const api = {
+    registerToolRenderer(): void {},
     registerTool(tool: unknown): void {
       capturedTools.push(tool as ToolLike);
       overrides.registerTool?.(tool);

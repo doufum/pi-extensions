@@ -2,6 +2,8 @@
 
 [简体中文](./README.zh-CN.md)
 
+This codemode fork in [doufum/pi-extensions](https://github.com/doufum/pi-extensions/tree/feat/codemode-display/packages/pi-tool-display-intent) is based on `@zhcsyncer/pi-tool-display-intent` 0.10.1 and requires Pi 1.1.0 or later. It preserves both upstream layouts and adds nested calls, timing, failures, and short result previews for codemode.
+
 ![Collapsed Run ledger](./assets/demo-aggregate-1.png)
 
 `pi-tool-display-intent` is a modified fork of [`MasuRii/pi-tool-display`](https://github.com/MasuRii/pi-tool-display) 0.5.0. It keeps compact tool rendering and adds model-written, user-facing intent. The `displaySummary` field is adapted from [`mertdeveci5/pi-tool-display-summary`](https://github.com/mertdeveci5/pi-tool-display-summary) 0.1.0.
@@ -32,8 +34,8 @@ Do not load `pi-tool-display`, `pi-tool-display-summary`, and this extension tog
 ## Install
 
 ```bash
-pi install npm:@zhcsyncer/pi-tool-display-intent
-pi install npm:@zhcsyncer/pi-extensions
+git clone --branch feat/codemode-display https://github.com/doufum/pi-extensions.git
+pi install ./pi-extensions/packages/pi-tool-display-intent
 ```
 
 Then restart Pi or run `/reload`.
@@ -47,6 +49,20 @@ Then restart Pi or run `/reload`.
 ```
 
 Empty `/tools` opens the settings panel. Switching layout asks to reload this session, then saves and reloads. Bash intent language is available in both layouts and applies after `/reload`; layout-specific display knobs stay in the panel.
+
+## Codemode
+
+Both layouts generate summaries from actual calls without an extra intent field. A collapsed individual call looks like this:
+
+```text
+● Codemode · read ×2 · bash ×1
+  3 succeeded · 1.2s
+  Tests passed
+```
+
+The collapsed view hides JavaScript and previews up to three output rows. Nested failures and cancellations remain visible even when caught by the script with `Promise.allSettled` or `catch`. Scripts that do not call tools show `0 calls`.
+
+Use `Ctrl+O` in individual mode to expand the script, nested targets and timings, and output. In aggregate mode, codemode counts as one call and nested calls are counted separately. Expand the Run to see nested calls and a short result; click the codemode row to inspect highlighted JavaScript in Args, output in Result, and the call ledger in Metadata. Settled Runs retain the last codemode result preview. Older sessions without a nested ledger still show their output.
 
 ## Layouts
 
